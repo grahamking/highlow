@@ -86,19 +86,30 @@ impl DB {
         }
     }
 
-    fn max_price(&self) -> ~Price {
-        return ~Price{date:~"TODO", close:~"TODO"};
-        /*
-        let st: sqlite::Cursor = self.database.prepare("SELECT date, price FROM prices ORDER BY price DESC LIMIT 1", &None).unwrap();
-        st.step_row();
+    fn _min_max(&self, min_max: &str) -> ~Price {
+
+        let extra =
+            match min_max {
+                "MAX" => "DESC",
+                _ => ""
+            };
+        let sql = fmt!(
+            "SELECT date, price FROM prices ORDER BY price %s LIMIT 1",
+            extra);
+
+        let st: sqlite::Cursor = self.database.prepare(sql, &None).unwrap();
+        st.step();
         let date = st.get_text(0);
         let price = st.get_num(1);
         return ~Price{date:date, close:fmt!("%f", price)}
-        */
+    }
+
+    fn max_price(&self) -> ~Price {
+        self._min_max("MAX")
     }
 
     fn min_price(&self) -> ~Price {
-        return ~Price{date:~"TODO", close:~"TODO"};
+        self._min_max("MIN")
     }
 }
 
