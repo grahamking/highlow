@@ -205,17 +205,4 @@ fn main() {
         [_, other] => println(fmt!("Invalid cmd: %s", other)),
         _ => println(USAGE)
     }
-
-    /*
-    let cmd: ~str = args[1].clone();
-    let symbol: ~str = args[2].clone();
-
-    match cmd {
-        ~"load" => cmd_load(symbol, args[3]),
-        ~"max" => cmd_max(symbol),
-        ~"min" => cmd_min(symbol),
-        other => println(fmt!("Invalid cmd: %s", other))
-    }
-    */
 }
-
