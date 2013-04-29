@@ -1,0 +1,14 @@
+VT -> All World equity
+
+SPY -> S&P500
+DIA -> Down Jones Industrial Average
+BND -> Total (US) Bond Market
+VNQ -> US Real Estate (REIT)
+
+EWJ -> MSCI Japan
+VGK -> FTSE Europe
+EWC -> Canada
+VWO -> Emerging Markets
+
+GLD -> SPDR Gold Shares
+DBC -> Commodities

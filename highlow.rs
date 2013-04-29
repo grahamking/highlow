@@ -125,23 +125,25 @@ fn parse(symbol: &str, lines: &[~str]) -> ~[Price] {
 }
 
 fn save(prices: ~[Price]) {
-    println("Start save");
 
-    let res = DB::open("test.db");
+    let dbname = "test.db";
+
+    let is_created: bool = os::path_exists(~path::Path(dbname));
+
+    let res = DB::open(dbname);
     if ! res.is_ok() {
         return;
     }
+
     let db = res.unwrap();
 
-    println("Opened");
-
-    match db.create() {
-        Err(code) => { println(fmt!("Error creating tables: %s",
-                                    code.to_str())); return; }
-        _ => {}
-    };
-
-    println("Created");
+    if !is_created {
+        match db.create() {
+            Err(code) => { println(fmt!("Error creating tables: %s",
+                                        code.to_str())); return; }
+            _ => {}
+        };
+    }
 
     let mut val: float = 0.0;
     for prices.each |&price| {
@@ -161,7 +163,6 @@ fn cmd_load(symbol: &str, filename: &str) {
     let lines: &[~str] = all_lines.tail();
 
     let prices: ~[Price] = parse(symbol, lines);
-    println(fmt!("%?", prices));
 
     save(prices);
 }
@@ -197,6 +198,15 @@ fn main() {
         return;
     }
 
+    match args {
+        [_, ~"load", symbol, filename] => cmd_load(symbol, filename),
+        [_, ~"max", symbol] => cmd_max(symbol),
+        [_, ~"min", symbol] => cmd_min(symbol),
+        [_, other] => println(fmt!("Invalid cmd: %s", other)),
+        _ => println(USAGE)
+    }
+
+    /*
     let cmd: ~str = args[1].clone();
     let symbol: ~str = args[2].clone();
 
@@ -206,5 +216,6 @@ fn main() {
         ~"min" => cmd_min(symbol),
         other => println(fmt!("Invalid cmd: %s", other))
     }
+    */
 }
 
