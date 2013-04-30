@@ -192,17 +192,14 @@ fn main() {
 
     static USAGE: &'static str = "Usage: highlow load <symbol> <filename>|max <symbol>|min <symbol>";
 
-    let args: &[~str] = os::args();
-    if args.len() < 3 {
-        println(USAGE);
-        return;
-    }
+    let mut args = os::args();
+    args.shift();
 
     match args {
-        [_, ~"load", symbol, filename] => cmd_load(symbol, filename),
-        [_, ~"max", symbol] => cmd_max(symbol),
-        [_, ~"min", symbol] => cmd_min(symbol),
-        [_, other] => println(fmt!("Invalid cmd: %s", other)),
+        [~"load", symbol, filename] => cmd_load(symbol, filename),
+        [~"max", symbol] => cmd_max(symbol),
+        [~"min", symbol] => cmd_min(symbol),
+        [other] => { println(fmt!("Invalid cmd: %s", other)); println(USAGE); }
         _ => println(USAGE)
     }
 }
