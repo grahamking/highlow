@@ -1,93 +1,10 @@
 
-extern mod sqlite;
-
 use core::result;
 use core::io;
 use core::path;
-use core::clone;
-use core::to_str;
 
-struct Price {
-    symbol: ~str,
-    date: ~str,
-    price: ~str
-}
-
-impl clone::Clone for Price {
-    fn clone(&self) -> Price {
-        Price{
-            symbol: self.symbol.clone(),
-            date: self.date.clone(),
-            price: self.price.clone()}
-    }
-}
-impl to_str::ToStr for Price {
-    fn to_str(&self) -> ~str {
-        fmt!("%s %s: %s", self.symbol, self.date, self.price)
-    }
-}
-
-struct DB {
-    filename: ~str,
-    database: sqlite::Database
-}
-
-impl DB {
-
-    fn open(name: &str) -> Result<DB, ~str> {
-
-        match sqlite::open(name) {
-            // Here 'name' is borrowed. Calling .to_str() makes a new
-            // owned string, which the object will hold.
-            Ok(db) => Ok(DB{filename: name.to_str(), database: db}),
-            Err(e) => {
-                println(fmt!("Error opening test.db: %?", e));
-                Err(e.to_str())
-            }
-        }
-    }
-
-    fn create(&self) -> Result<sqlite::ResultCode, sqlite::ResultCode>  {
-        self.database.exec(
-            "CREATE TABLE prices (symbol text, date text, price real)")
-    }
-
-    fn write_price(&self, symbol: &str, date: &str, price: float) {
-        let res = self.database.exec(fmt!(
-            "INSERT INTO prices VALUES ('%s', '%s', %f)", symbol, date, price));
-        if ! res.is_ok() {
-            println(fmt!("INSERT error: %s", res.unwrap_err().to_str()));
-        }
-    }
-
-    fn _min_max(&self, min_max: &str, symbol: &str) -> ~Price {
-
-        let extra =
-            match min_max {
-                "MAX" => "DESC",
-                _ => ""
-            };
-        let sql = fmt!(
-            "SELECT symbol, date, price FROM prices WHERE symbol = '%s' ORDER BY price %s LIMIT 1",
-            symbol,
-            extra);
-
-        let st: sqlite::Cursor = self.database.prepare(sql, &None).unwrap();
-        st.step();
-        let symbol = st.get_text(0);
-        let date = st.get_text(1);
-        let price = st.get_num(2);
-        return ~Price{symbol: symbol, date:date, price:fmt!("%f", price)}
-    }
-
-    fn max_price(&self, symbol: &str) -> ~Price {
-        self._min_max("MAX", symbol)
-    }
-
-    fn min_price(&self, symbol: &str) -> ~Price {
-        self._min_max("MIN", symbol)
-    }
-}
+mod db;
+mod price;
 
 fn load(filename: &str) -> ~[~str] {
 
@@ -96,12 +13,12 @@ fn load(filename: &str) -> ~[~str] {
     return f.read_lines();
 }
 
-fn parse(symbol: &str, lines: &[~str]) -> ~[Price] {
+fn parse(symbol: &str, lines: &[~str]) -> ~[price::Price] {
 
     let mut date = ~"";
     let mut close = ~"";
     let mut i = 0;
-    let mut prices: ~[Price] = ~[];
+    let mut prices: ~[price::Price] = ~[];
 
     for lines.each |&line| {
 
@@ -114,7 +31,7 @@ fn parse(symbol: &str, lines: &[~str]) -> ~[Price] {
             }
             i += 1;
         }
-        prices += [Price{
+        prices += [price::Price{
             symbol: symbol.to_str(),
             date: date.clone(),
             price: close.clone()}
@@ -124,13 +41,13 @@ fn parse(symbol: &str, lines: &[~str]) -> ~[Price] {
     return prices;
 }
 
-fn save(prices: ~[Price]) {
+fn save(prices: ~[price::Price]) {
 
     let dbname = "test.db";
 
     let is_created: bool = os::path_exists(~path::Path(dbname));
 
-    let res = DB::open(dbname);
+    let res = db::DB::open(dbname);
     if ! res.is_ok() {
         return;
     }
@@ -162,14 +79,14 @@ fn cmd_load(symbol: &str, filename: &str) {
     // don't want.
     let lines: &[~str] = all_lines.tail();
 
-    let prices: ~[Price] = parse(symbol, lines);
+    let prices: ~[price::Price] = parse(symbol, lines);
 
     save(prices);
 }
 
 fn cmd_max(symbol: &str) {
 
-    let res = DB::open("test.db");
+    let res = db::DB::open("test.db");
     if ! res.is_ok() {
         return;
     }
@@ -179,7 +96,7 @@ fn cmd_max(symbol: &str) {
 }
 
 fn cmd_min(symbol: &str) {
-    let res = DB::open("test.db");
+    let res = db::DB::open("test.db");
     if ! res.is_ok() {
         return;
     }
@@ -188,9 +105,32 @@ fn cmd_min(symbol: &str) {
     println(db.min_price(symbol).to_str());
 }
 
+fn cmd_trade(symbol: &str) {
+
+    let res = db::DB::open("test.db");
+    if ! res.is_ok() {
+        return;
+    }
+    let d = res.unwrap();
+
+    let year = d.load_year(symbol);
+    println(fmt!("%?", year));
+
+    for d.prices_after(year[year.len()-1]).each |next_price| {
+
+        println(fmt!("Examining: %?", next_price));
+
+        if next_price.is_max(year) {
+            println(fmt!("%?: SELL", next_price));
+        } else if next_price.is_min(year) {
+            println(fmt!("%?: BUY", next_price));
+        }
+    }
+}
+
 fn main() {
 
-    static USAGE: &'static str = "Usage: highlow load <symbol> <filename>|max <symbol>|min <symbol>";
+    static USAGE: &'static str = "Usage: highlow load <symbol> <filename>|max <symbol>|min <symbol>|trade <symbol>";
 
     let mut args = os::args();
     args.shift();
@@ -199,6 +139,7 @@ fn main() {
         [~"load", symbol, filename] => cmd_load(symbol, filename),
         [~"max", symbol] => cmd_max(symbol),
         [~"min", symbol] => cmd_min(symbol),
+        [~"trade", symbol] => cmd_trade(symbol),
         [other] => { println(fmt!("Invalid cmd: %s", other)); println(USAGE); }
         _ => println(USAGE)
     }
