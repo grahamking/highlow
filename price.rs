@@ -25,10 +25,13 @@ impl to_str::ToStr for Price {
 pub impl Price {
 
     fn is_max(&self, prices: &[~Price]) -> bool {
-        return false;
+
+        let p = float::from_str(self.price).unwrap();
+        !vec::any(prices, |contender| { float::from_str(contender.price).unwrap() > p })
     }
 
     fn is_min(&self, prices: &[~Price]) -> bool{
-        return false;
+        let p = float::from_str(self.price).unwrap();
+        !vec::any(prices, |contender| { float::from_str(contender.price).unwrap() < p })
     }
 }

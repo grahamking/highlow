@@ -114,16 +114,35 @@ fn cmd_trade(symbol: &str) {
     let d = res.unwrap();
 
     let year = d.load_year(symbol);
-    println(fmt!("%?", year));
+
+    let unit = 1000.0;
+    let mut position = 0.0;
+    let mut money = 10000.0;
 
     for d.prices_after(year[year.len()-1]).each |next_price| {
 
-        println(fmt!("Examining: %?", next_price));
-
         if next_price.is_max(year) {
-            println(fmt!("%?: SELL", next_price));
+            if position <= 0.0 {
+                loop;
+            }
+            println(fmt!("SELL: %?", next_price));
+
+            let p = float::from_str(next_price.price).unwrap();
+            let num_sold = unit / p;
+            position -= num_sold;
+            money += num_sold * p;
+
         } else if next_price.is_min(year) {
-            println(fmt!("%?: BUY", next_price));
+            if money <= 0.0 {
+                loop;
+            }
+            print(fmt!("%s: BUY at %s - ", next_price.date, next_price.price));
+
+            let p = float::from_str(next_price.price).unwrap();
+            let num_bought = unit / p;
+            position += num_bought;
+            money -= num_bought * p;
+            println(fmt!("$%f, %f shares", money, position));
         }
     }
 }
