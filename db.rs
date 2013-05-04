@@ -1,7 +1,7 @@
 
 extern mod sqlite;
-
-mod price;
+use core::clone;
+use core::to_str;
 
 struct DB {
     filename: ~str,
@@ -36,7 +36,7 @@ pub impl DB {
         }
     }
 
-    fn _min_max(&self, min_max: &str, symbol: &str) -> ~price::Price {
+    fn _min_max(&self, min_max: &str, symbol: &str) -> ~Price {
 
         let extra =
             match min_max {
@@ -53,18 +53,18 @@ pub impl DB {
         let symbol = st.get_text(0);
         let date = st.get_text(1);
         let price = st.get_num(2);
-        return ~price::Price{symbol: symbol, date:date, price:fmt!("%f", price)}
+        return ~Price{symbol: symbol, date:date, price:fmt!("%f", price)}
     }
 
-    fn max_price(&self, symbol: &str) -> ~price::Price {
+    fn max_price(&self, symbol: &str) -> ~Price {
         self._min_max("MAX", symbol)
     }
 
-    fn min_price(&self, symbol: &str) -> ~price::Price {
+    fn min_price(&self, symbol: &str) -> ~Price {
         self._min_max("MIN", symbol)
     }
 
-    fn load_year(&self, symbol: &str) -> ~[~price::Price] {
+    fn load_year(&self, symbol: &str) -> @[~Price] {
 
         /*
           252 is about the number of trading days in a year,
@@ -72,20 +72,19 @@ pub impl DB {
           Accuracy isn't especially important here, it's just seed data
         */
 
-        let SQL = fmt!("SELECT date, price FROM prices WHERE symbol = '%s' ORDER BY date LIMIT 252",
-                       symbol);
+        let SQL = fmt!("SELECT date, price FROM prices WHERE symbol = '%s' ORDER BY date LIMIT 252", symbol);
 
         let st: sqlite::Cursor = self.database.prepare(SQL, &None).unwrap();
         let mut date;
         let mut priceVal;
         let mut priceObj;
 
-        let mut result = ~[];
+        let mut result = @[];
 
         while st.step() == sqlite::SQLITE_ROW {
             date = st.get_text(0);
             priceVal = st.get_text(1);
-            priceObj = ~price::Price{
+            priceObj = ~Price{
                 symbol: symbol.to_str(),
                 date: date,
                 price: priceVal};
@@ -96,10 +95,9 @@ pub impl DB {
         return result;
     }
 
-    fn prices_after(&self, after_this: &price::Price) -> ~[~price::Price] {
+    fn prices_after(&self, after_this: &Price) -> ~[~Price] {
 
-        let SQL = fmt!("SELECT date, price FROM prices WHERE date > '%s' ORDER BY date LIMIT 100",
-                       after_this.date);
+        let SQL = fmt!("SELECT date, price FROM prices WHERE symbol = '%s' AND date > '%s' ORDER BY date", after_this.symbol, after_this.date);
 
         let st: sqlite::Cursor = self.database.prepare(SQL, &None).unwrap();
         let mut date;
@@ -111,7 +109,7 @@ pub impl DB {
         while st.step() == sqlite::SQLITE_ROW {
             date = st.get_text(0);
             priceVal = st.get_text(1);
-            priceObj = ~price::Price{
+            priceObj = ~Price{
                 symbol: after_this.symbol.to_str(),
                 date: date,
                 price: priceVal};
@@ -120,6 +118,40 @@ pub impl DB {
         }
 
         return result;
+    }
+}
+
+pub struct Price {
+    symbol: ~str,
+    date: ~str,
+    price: ~str
+}
+
+impl clone::Clone for Price {
+    fn clone(&self) -> Price {
+        Price{
+            symbol: self.symbol.clone(),
+            date: self.date.clone(),
+            price: self.price.clone()}
+    }
+}
+impl to_str::ToStr for Price {
+    fn to_str(&self) -> ~str {
+        fmt!("%s %s: %s", self.symbol, self.date, self.price)
+    }
+}
+
+pub impl Price {
+
+    fn is_max(&self, prices: &[~Price]) -> bool {
+
+        let p = float::from_str(self.price).unwrap();
+        !vec::any(prices, |contender| { float::from_str(contender.price).unwrap() > p })
+    }
+
+    fn is_min(&self, prices: &[~Price]) -> bool{
+        let p = float::from_str(self.price).unwrap();
+        !vec::any(prices, |contender| { float::from_str(contender.price).unwrap() < p })
     }
 }
 

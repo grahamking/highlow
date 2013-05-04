@@ -4,7 +4,6 @@ use core::io;
 use core::path;
 
 mod db;
-mod price;
 
 fn load(filename: &str) -> ~[~str] {
 
@@ -13,12 +12,12 @@ fn load(filename: &str) -> ~[~str] {
     return f.read_lines();
 }
 
-fn parse(symbol: &str, lines: &[~str]) -> ~[price::Price] {
+fn parse(symbol: &str, lines: &[~str]) -> ~[db::Price] {
 
     let mut date = ~"";
     let mut close = ~"";
     let mut i = 0;
-    let mut prices: ~[price::Price] = ~[];
+    let mut prices: ~[db::Price] = ~[];
 
     for lines.each |&line| {
 
@@ -31,7 +30,7 @@ fn parse(symbol: &str, lines: &[~str]) -> ~[price::Price] {
             }
             i += 1;
         }
-        prices += [price::Price{
+        prices += [db::Price{
             symbol: symbol.to_str(),
             date: date.clone(),
             price: close.clone()}
@@ -41,7 +40,7 @@ fn parse(symbol: &str, lines: &[~str]) -> ~[price::Price] {
     return prices;
 }
 
-fn save(prices: ~[price::Price]) {
+fn save(prices: ~[db::Price]) {
 
     let dbname = "test.db";
 
@@ -64,11 +63,12 @@ fn save(prices: ~[price::Price]) {
 
     let mut val: float = 0.0;
     for prices.each |&price| {
-        println(price.to_str());
+        print("."); // Show progress
 
         val = float::from_str(price.price).unwrap();
         db.write_price(price.symbol.to_str(), price.date.to_str(), val);
     }
+    println("");
 
 }
 
@@ -79,7 +79,7 @@ fn cmd_load(symbol: &str, filename: &str) {
     // don't want.
     let lines: &[~str] = all_lines.tail();
 
-    let prices: ~[price::Price] = parse(symbol, lines);
+    let prices: ~[db::Price] = parse(symbol, lines);
 
     save(prices);
 }
@@ -105,7 +105,7 @@ fn cmd_min(symbol: &str) {
     println(db.min_price(symbol).to_str());
 }
 
-fn cmd_trade(symbol: &str) {
+fn cmd_trade(symbol: &str, amount: float) {
 
     let res = db::DB::open("test.db");
     if ! res.is_ok() {
@@ -113,27 +113,28 @@ fn cmd_trade(symbol: &str) {
     }
     let d = res.unwrap();
 
-    let year = d.load_year(symbol);
-
     let unit = 1000.0;
     let mut position = 0.0;
-    let mut money = 10000.0;
+    let mut money = amount;
 
-    for d.prices_after(year[year.len()-1]).each |next_price| {
+    let mut year: @[~db::Price] = d.load_year(symbol);
+
+    for d.prices_after(year[year.len()-1]).each |&next_price| {
 
         if next_price.is_max(year) {
-            if position <= 0.0 {
+            if position < 1.0 {
                 loop;
             }
-            println(fmt!("SELL: %?", next_price));
+            print(fmt!("%s: SELL at %s - ", next_price.date, next_price.price));
 
             let p = float::from_str(next_price.price).unwrap();
-            let num_sold = unit / p;
+            let num_sold = cmp::min(unit / p, position);
             position -= num_sold;
             money += num_sold * p;
+            println(fmt!("$%f, %f shares", money, position));
 
         } else if next_price.is_min(year) {
-            if money <= 0.0 {
+            if money < unit {
                 loop;
             }
             print(fmt!("%s: BUY at %s - ", next_price.date, next_price.price));
@@ -144,12 +145,17 @@ fn cmd_trade(symbol: &str) {
             money -= num_bought * p;
             println(fmt!("$%f, %f shares", money, position));
         }
+
+        let mut owned: ~[~db::Price] = year.to_owned();
+        owned.shift();
+        owned = vec::append_one(owned, next_price);
+        year = at_vec::from_owned(owned)
     }
 }
 
 fn main() {
 
-    static USAGE: &'static str = "Usage: highlow load <symbol> <filename>|max <symbol>|min <symbol>|trade <symbol>";
+    static USAGE: &'static str = "Usage: highlow load <symbol> <filename>|max <symbol>|min <symbol>|trade <symbol> <amount>";
 
     let mut args = os::args();
     args.shift();
@@ -158,7 +164,7 @@ fn main() {
         [~"load", symbol, filename] => cmd_load(symbol, filename),
         [~"max", symbol] => cmd_max(symbol),
         [~"min", symbol] => cmd_min(symbol),
-        [~"trade", symbol] => cmd_trade(symbol),
+        [~"trade", symbol, amount] => cmd_trade(symbol, float::from_str(amount).unwrap()),
         [other] => { println(fmt!("Invalid cmd: %s", other)); println(USAGE); }
         _ => println(USAGE)
     }
